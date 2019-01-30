@@ -37,6 +37,16 @@ config :nerves_network, :default,
     ]
   ]
 
+config :nerves_team_ui, :viewport, %{
+  size: {128, 64},
+  default_scene: {NervesTeamUI.Scene.Home, nil},
+  drivers: [
+    %{
+      module: ScenicDriverOLEDBonnet
+    }
+  ]
+}
+
 # Import target specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 # Uncomment to use target specific configurations
