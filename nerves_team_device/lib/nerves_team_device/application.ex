@@ -29,10 +29,22 @@ defmodule NervesTeamDevice.Application do
   end
 
   def children(_target) do
+    {:ok, engine} = NervesKey.PKCS11.load_engine()
+    {:ok, i2c} = ATECC508A.Transport.I2C.init([])
+
+    cert =
+      NervesKey.device_cert(i2c, :aux)
+      |> X509.Certificate.to_der()
+
+    signer_cert =
+      NervesKey.signer_cert(i2c, :aux)
+      |> X509.Certificate.to_der()
+
+    key = NervesKey.PKCS11.private_key(engine, i2c: 1)
+    cacerts = [signer_cert | NervesHub.Certificate.ca_certs()]
+
     [
-      # Children for all targets except host
-      # Starts a worker by calling: NervesTeamDevice.Worker.start_link(arg)
-      # {NervesTeamDevice.Worker, arg},
+      {NervesHub.Supervisor, [key: key, cert: cert, cacerts: cacerts]}
     ]
   end
 
