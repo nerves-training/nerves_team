@@ -5,10 +5,12 @@ defmodule NervesTeamUI.Scene.Lobby do
   alias Scenic.Graph
   alias Scenic.ViewPort
 
-  alias PhoenixClient.Channel
+  alias PhoenixClient.{Channel, Message}
 
   import Scenic.Primitives
   # import Scenic.Components
+
+  require Logger
 
   @note """
   Lobby
@@ -41,6 +43,40 @@ defmodule NervesTeamUI.Scene.Lobby do
       viewport: opts[:viewport],
       channel: channel,
     }, push: graph}
+  end
+
+  def handle_info(:connect, %{viewport: viewport} = state) do
+    if PhoenixClient.Socket.connected?(PhoenixClient.Socket) do
+      ViewPort.set_root(viewport,
+        {NervesTeamUI.Scene.Lobby, nil})
+    else
+      Process.send_after(self(), :connect, 1_000)
+    end
+    {:noreply, state}
+  end
+
+  def handle_info(
+    %Message{event: "player:list", payload: %{"players" =>
+      players}}, state) do
+
+    player_ids =
+      Enum.map(players, &Map.get(&1, "id")) |> Enum.join(",")
+    state = update(:title, player_ids, state)
+    {:noreply, state, push: state.graph}
+  end
+
+  def handle_info(message, state) do
+    Logger.debug("Unhandled message: #{inspect(message)}")
+    {:noreply, state}
+  end
+
+  defp update(element, text, state) do
+    ScenicFontPressStart2p.load()
+    graph =
+      state.graph
+      |> Graph.modify(element, &text(&1, text))
+
+    %{state | graph: graph}
   end
 
   def handle_input(event, _context, state) do
