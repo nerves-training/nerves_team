@@ -2,7 +2,7 @@ defmodule NervesTeamDevice.MixProject do
   use Mix.Project
 
   @app :nerves_team_device
-  @version "0.1.0"
+  @version "0.2.0"
   @all_targets [:rpi0]
 
   def project do
