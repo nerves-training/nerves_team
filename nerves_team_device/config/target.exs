@@ -23,6 +23,20 @@ config :nerves_init_gadget,
   node_name: node_name,
   node_host: :mdns_domain
 
+config :nerves_hub,
+  public_keys: [:training]
+
+config :nerves_network, :default,
+  wlan0: [
+    networks: [
+      [
+        ssid: "nerves-devices",
+        psk: "nervestraining",
+        key_mgmt: :"WPA-PSK"
+      ]
+    ]
+  ]
+
 # Import target specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 # Uncomment to use target specific configurations
