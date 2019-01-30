@@ -9,6 +9,7 @@ defmodule NervesTeamDevice.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: NervesTeamDevice.Supervisor]
+
     children =
       [
         # Children for all targets
@@ -29,10 +30,13 @@ defmodule NervesTeamDevice.Application do
   end
 
   def children(_target) do
+    {:ok, i2c} = ATECC508A.Transport.I2C.init([])
+
+    ssl_opts = NervesKey.ssl_opts(i2c, :aux)
+    opts = Keyword.put(ssl_opts, :cacerts, ssl_opts[:cacerts] ++ NervesHub.Certificate.ca_certs())
+
     [
-      # Children for all targets except host
-      # Starts a worker by calling: NervesTeamDevice.Worker.start_link(arg)
-      # {NervesTeamDevice.Worker, arg},
+      {NervesHub.Supervisor, opts}
     ]
   end
 
