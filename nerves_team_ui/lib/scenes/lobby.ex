@@ -1,15 +1,17 @@
-defmodule NervesTeamUI.Scene.Home do
+defmodule NervesTeamUI.Scene.Lobby do
   use Scenic.Scene
   require Logger
 
   alias Scenic.Graph
   alias Scenic.ViewPort
 
+  alias PhoenixClient.Channel
+
   import Scenic.Primitives
   # import Scenic.Components
 
   @note """
-  NervesTeam
+  Lobby
   """
 
   @text_size 8
@@ -29,25 +31,16 @@ defmodule NervesTeamUI.Scene.Home do
     graph =
       Graph.build(font: ScenicFontPressStart2p.hash(), font_size: @text_size)
       |> add_specs_to_graph([
-        text_spec(@note, text_align: :center, translate: center),
+        text_spec(@note, id: :title, text_align: :center, translate: center),
       ])
 
-    send(self(), :connect)
+    {:ok, _reply, channel} = Channel.join(NervesTeamUI.Socket, "game:lobby")
 
     {:ok, %{
       graph: graph,
-      viewport: opts[:viewport]
+      viewport: opts[:viewport],
+      channel: channel,
     }, push: graph}
-  end
-
-  def handle_info(:connect, %{viewport: viewport} = state) do
-    if PhoenixClient.Socket.connected?(NervesTeamUI.Socket) do
-      ViewPort.set_root(viewport,
-        {NervesTeamUI.Scene.Lobby, nil})
-    else
-      Process.send_after(self(), :connect, 1_000)
-    end
-    {:noreply, state}
   end
 
   def handle_input(event, _context, state) do
