@@ -47,6 +47,10 @@ config :nerves_team_ui, :viewport, %{
   ]
 }
 
+config :nerves_team_ui, :socket,
+  url: "ws://peer.usb0.lan:4000/socket/websocket",
+  reconnect_interval: 1_000
+
 # Import target specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 # Uncomment to use target specific configurations

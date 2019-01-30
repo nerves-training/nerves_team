@@ -55,6 +55,15 @@ defmodule NervesTeamUI.Scene.Lobby do
     {:noreply, state}
   end
 
+  def handle_info(%Message{event: event}, state)
+    when event in ["phx_error", "phx_close"] do
+
+    ViewPort.set_root(state.viewport,
+      {NervesTeamUI.Scene.Home, nil})
+
+    {:noreply, state}
+  end
+
   def handle_info(
     %Message{event: "player:list", payload: %{"players" =>
       players}}, state) do
