@@ -16,6 +16,10 @@ config :nerves_team_ui, :viewport, %{
   ]
 }
 
+config :nerves_team_ui, :socket,
+  url: "ws://localhost:4000/socket/websocket",
+  reconnect_interval: 1_000
+
 # It is also possible to import configuration files, relative to this
 # directory. For example, you can emulate configuration per environment
 # by uncommenting the line below and defining dev.exs, test.exs and such.
