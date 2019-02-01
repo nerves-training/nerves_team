@@ -25,8 +25,7 @@ defmodule NervesTeamUI.MixProject do
     [
       {:scenic, "~> 0.10"},
       {:scenic_driver_glfw, "~> 0.10", targets: :host},
-      {:scenic_font_press_start_2p,
-        github: "nerves-training/scenic_font_press_start_2p"},
+      {:scenic_font_press_start_2p, github: "nerves-training/scenic_font_press_start_2p"},
       {:phoenix_client, "~> 0.6"},
       {:websocket_client, "~> 1.3"},
       {:jason, "~> 1.0"}
