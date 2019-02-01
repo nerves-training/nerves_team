@@ -4,18 +4,18 @@ defmodule NervesTeamUI.Scene.Game do
 
   alias Scenic.Graph
   alias Scenic.ViewPort
-
-  alias PhoenixClient.{Socket, Channel, Message}
+  alias ScenicFontPressStart2p
+  alias NervesTeamUI.Component.Progress, as: ProgressComponent
+  alias NervesTeamUI.Component.Action, as: ActionComponent
+  alias PhoenixClient.{Channel, Message}
 
   import Scenic.Primitives
-  # import Scenic.Components
 
   require Logger
 
-  @note """
-  Get ready!
-  """
-  @action_key ["A", "S"]
+  @title "Waiting for\nplayers"
+
+  @action_keys ["A", "S"]
 
   @text_size 8
 
@@ -23,123 +23,176 @@ defmodule NervesTeamUI.Scene.Game do
   # setup
 
   # --------------------------------------------------------
-  def init(payload, opts) do
+  def init(%{game_id: game_id, player_id: player_id}, opts) do
     ScenicFontPressStart2p.load()
-    # get the width and height of the viewport. This is to demonstrate creating
-    # a transparent full-screen rectangle to catch user input
-    {:ok, %ViewPort.Status{size: {width, height}}} = ViewPort.info(opts[:viewport])
-
-    top =   {0.5  * width, 0.25 * height}
-    left =  {0.25 * width, 0.75 * height}
-    right = {0.75 * width, 0.75 * height}
+    viewport = opts[:viewport]
+    {:ok, %ViewPort.Status{size: {vp_width, vp_height}}} = ViewPort.info(viewport)
 
     graph =
       Graph.build(font: ScenicFontPressStart2p.hash(), font_size: @text_size)
-      |> add_specs_to_graph([
-        text_spec(@note, id: :title, text_align: :center, translate: top),
-        text_spec("", id: :action1, text_align: :center, translate: left),
-        text_spec("", id: :action2, text_align: :center, translate: right),
-      ])
+      |> ProgressComponent.add_to_graph([duration: false], value: 100, id: :task_progress)
+      |> ProgressComponent.add_to_graph([value: 50],
+        id: :game_progress,
+        translate: {0, vp_height - 5}
+      )
+      |> text(@title,
+        id: :status,
+        text_align: :center,
+        translate: {vp_width / 2, 18},
+        hidden: false
+      )
+      |> text("", id: :task, text_align: :center, translate: {vp_width / 2, 18}, hidden: true)
+      |> rect({vp_width, 1}, fill: :white, translate: {0, vp_height / 2})
+      |> rect({1, vp_height / 2 - 5}, fill: :white, translate: {vp_width / 2, vp_height / 2})
 
-    %{"game_id" => game_id} = payload
+    {:ok, _, channel} = Channel.join(NervesTeamUI.Socket, "game:#{game_id}", %{player_id: player_id})
 
-    {:ok, _reply, channel} = Channel.join(Socket, "game:" <> game_id, payload)
-
-    {:ok, %{
-      graph: graph,
-      viewport: opts[:viewport],
-      channel: channel,
-      actions: []
-    }, push: graph}
+    {:ok,
+     %{
+       viewport: viewport,
+       graph: graph,
+       channel: channel,
+       game_id: game_id,
+       task: nil,
+       action_0: nil,
+       action_1: nil
+     }, push: graph}
   end
 
-  def handle_info(:connect, %{viewport: viewport} = state) do
-    if PhoenixClient.Socket.connected?(PhoenixClient.Socket) do
-      ViewPort.set_root(viewport,
-        {NervesTeamUI.Scene.Lobby, nil})
-    else
-      Process.send_after(self(), :connect, 1_000)
-    end
-    {:noreply, state}
+  def handle_info(%Message{event: :close}, %{viewport: vp} = s) do
+    ViewPort.set_root(vp, {NervesTeamUI.Scene.Connect, nil})
+    {:noreply, s}
   end
 
-  def handle_info(%Message{event: event}, state)
-    when event in ["phx_error", "phx_close"] do
-
-    ViewPort.set_root(state.viewport,
-      {NervesTeamUI.Scene.Home, nil})
-
-    {:noreply, state}
-  end
-
-  def handle_info(
-    %Message{event: "player:list", payload: %{"players" =>
-      players}}, state) do
-
-    player_ids =
-      Enum.map(players, &Map.get(&1, "id")) |> Enum.join(",")
-    state = update(:title, player_ids, state)
-    {:noreply, state, push: state.graph}
+  def handle_info(%Message{event: "game:ended", payload: %{"win?" => win?}}, %{viewport: vp} = s) do
+    Logger.debug("Game: Ended")
+    ViewPort.set_root(vp, {NervesTeamUI.Scene.GameOver, win?})
+    {:noreply, s}
   end
 
   def handle_info(
-    %Message{event: "task:assigned", payload: task}, state) do
-
-    %{"title" => task_name} = task
-    state = update(:title, task_name, state)
-    {:noreply, state, push: state}
-  end
-
-  def handle_info(
-    %Message{event: "actions:assigned", payload: payload},
-      state) do
-
-    %{"actions" =>  actions} = payload
-    state = update(:action1, Enum.at(actions, 0)["title"], state)
-    state = update(:action2, Enum.at(actions, 1)["title"], state)
-    {:noreply, %{state | actions: actions}, push: state.graph}
-  end
-
-  def handle_info(
-    %Message{event: "game:ended", payload: payload}, state) do
-
-    :timer.apply_after(5_000, ViewPort, :set_root,
-      [state.viewport, {NervesTeamUI.Scene.Home, nil}])
-    text = if payload["win?"], do: "You win", else: "You lose"
-    state = update(:title, text, state)
-    {:noreply, state, push: state.graph}
-  end
-
-  def handle_info(message, state) do
-    Logger.debug("Unhandled message: #{inspect(message)}")
-    {:noreply, state}
-  end
-
-  defp update(element, text, state) do
+        %Message{event: "actions:assigned", payload: payload},
+        %{graph: graph, viewport: vp} = s
+      ) do
+    %{"actions" => [action_0, action_1] = actions} = payload
     ScenicFontPressStart2p.load()
+    Logger.debug("Actions assigned: #{inspect(actions)}")
+    {:ok, %ViewPort.Status{size: {vp_width, vp_height}}} = ViewPort.info(vp)
+
     graph =
-      state.graph
-      |> Graph.modify(element, &text(&1, text))
+      graph
+      |> ActionComponent.add_to_graph([action: action_0],
+        id: :action_0,
+        translate: {0, vp_height / 2 + 1}
+      )
+      |> ActionComponent.add_to_graph([action: action_1],
+        id: :action_1,
+        translate: {vp_width / 2 + 1, vp_height / 2 + 1}
+      )
 
-    %{state | graph: graph}
+    {:noreply, %{s | graph: graph, action_0: action_0, action_1: action_1}, push: graph}
   end
 
-  def handle_input({:key, {key, action, _}}, _context, state)
-    when action in [:press, :release]
-    and key in @action_key do
+  def handle_info(%Message{event: "task:assigned", payload: task}, %{graph: graph} = s) do
+    Logger.debug("Task assigned: #{inspect(task)}")
+    ScenicFontPressStart2p.load()
 
-    index = Enum.find_index(@action_key, & &1 == key)
-    action = Enum.at(state.actions, index)
-    Channel.push(state.channel, "action:execute", action)
-    {:noreply, state}
+    graph =
+      graph
+      |> Graph.modify(:task, &text(&1, task["title"]))
+      |> Graph.modify(:task_progress, fn %{data: {mod, data}} = p ->
+        Scenic.Primitive.put(p, {mod, Keyword.put(data, :duration, false)}, [])
+      end)
+      |> Graph.modify(:task_progress, fn %{data: {mod, data}} = p ->
+        data =
+          data
+          |> Keyword.put(:duration, task["expire"])
+          |> Keyword.put(:value, 100)
+
+        Scenic.Primitive.put(p, {mod, data}, [])
+      end)
+
+    {:noreply, %{s | graph: graph, task: task}, push: graph}
   end
 
-  def handle_input({:key, {@action_key, action, _}}, _context, state)
-    when action in [:press, :release] do
+  def handle_info(%Message{event: "game:prepare"}, %{graph: graph} = s) do
+    ScenicFontPressStart2p.load()
 
-    ready? = action == :press
-    Channel.push(state.channel, "player:ready",%{ready: ready?})
-    {:noreply, state}
+    graph =
+      graph
+      |> Graph.modify(:status, &text(&1, "Get ready!"))
+
+    {:noreply, %{s | graph: graph}, push: graph}
+  end
+
+  def handle_info(%Message{event: "game:starting"}, %{graph: graph} = s) do
+    ScenicFontPressStart2p.load()
+
+    graph =
+      graph
+      |> Graph.modify(:status, &text(&1, "Go!"))
+
+    {:noreply, %{s | graph: graph}, push: graph}
+  end
+
+  def handle_info(%Message{event: "game:start"}, %{graph: graph} = s) do
+    ScenicFontPressStart2p.load()
+
+    graph =
+      graph
+      |> Graph.modify(:status, &update_opts(&1, hidden: true))
+      |> Graph.modify(:task, &update_opts(&1, hidden: false))
+      |> Graph.modify(:task_progress, fn %{data: {mod, data}} = p ->
+        Scenic.Primitive.put(p, {mod, Keyword.put(data, :duration, s.task["expire"])}, [])
+      end)
+
+    {:noreply, %{s | graph: graph}, push: graph}
+  end
+
+  def handle_info(
+        %Message{event: "game:progress", payload: %{"percent" => percent}},
+        %{graph: graph} = s
+      ) do
+    ScenicFontPressStart2p.load()
+
+    graph =
+      graph
+      |> Graph.modify(:game_progress, fn %{data: {mod, data}} = p ->
+        data =
+          data
+          |> Keyword.put(:percent, percent)
+
+        Scenic.Primitive.put(p, {mod, data}, [])
+      end)
+
+    {:noreply, %{s | graph: graph}, push: graph}
+  end
+
+  def handle_info(message, s) do
+    Logger.debug("Game: #{inspect(message)}")
+    {:noreply, s}
+  end
+
+  def handle_input({:key, {key, action, _}}, _context, %{graph: graph} = s)
+      when key in @action_keys do
+    ScenicFontPressStart2p.load()
+    idx = Enum.find_index(@action_keys, &(&1 == key))
+    action_id = :"action_#{idx}"
+    pressed? = action == :press
+
+    graph =
+      graph
+      |> Graph.modify(action_id, fn %{data: {mod, data}} = p ->
+        Scenic.Primitive.put(p, {mod, Keyword.put(data, :pressed?, pressed?)}, [])
+      end)
+
+    [%{data: {_mod, data}}] = Graph.get(graph, action_id)
+
+    if pressed? do
+      Channel.push(s.channel, "action:execute", data[:action])
+    end
+
+    {:noreply, %{s | graph: graph}, push: graph}
   end
 
   def handle_input(event, _context, state) do
