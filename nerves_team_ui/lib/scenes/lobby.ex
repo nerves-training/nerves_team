@@ -15,6 +15,7 @@ defmodule NervesTeamUI.Scene.Lobby do
   @note """
   Lobby
   """
+  @action_key " "
 
   @text_size 8
 
@@ -86,6 +87,14 @@ defmodule NervesTeamUI.Scene.Lobby do
       |> Graph.modify(element, &text(&1, text))
 
     %{state | graph: graph}
+  end
+
+  def handle_input({:key, {@action_key, action, _}}, _context, state)
+    when action in [:press, :release] do
+
+    ready? = action == :press
+    Channel.push(state.channel, "player:ready",%{ready: ready?})
+    {:noreply, state}
   end
 
   def handle_input(event, _context, state) do
