@@ -23,8 +23,7 @@ config :nerves_init_gadget,
   node_name: node_name,
   node_host: :mdns_domain
 
-config :nerves_hub,
-  public_keys: [:training]
+config :nerves_hub, fwup_public_keys: []
 
 config :nerves_network, :default,
   wlan0: [
